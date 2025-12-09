@@ -10,10 +10,9 @@ from starvote import Tiebreaker
 # ---
 csv_input = """
 A,B,C
-A,B,C
-2:3,4,5
-1:5,0,0
-4,4,4
+0,0,1
+0,2,2
+0,5,0
 """
 
 reverse_tiebreaking_order_manual = []

@@ -286,41 +286,8 @@ def run_example(name, raw_input, strict=True, rule='High', compressed=False):
 if __name__ == "__main__":
     # Example 1: Basic
     ex1 = """
-   4: A>B>C 
-3: C>B>A 
-2: B>A>C
+14:A>B>C
+20:B>A>C
 
     """
-
-    # Run with Weak mode to allow the tie in line 4
-    run_example("Example 1 (Weak)", ex1, strict=False, rule='High', compressed=False)
-
-    # Example 1: Basic (Compressed)
-    # Note: '2:B>A>C' is input. If we input B>A>C twice separately, compression would combine them.
-    # The existing multiplier input will be preserved as '2:...' in compressed output too.
-    run_example("Example 1 (Weak, Compressed)", ex1, strict=False, rule='High', compressed=True)
-
-    # Example from Doc: 2 Candidates, Low Rule
-    ex_low = """
-    A=B
-    """
-    run_example("Doc Example: Low Rule (A=B)", ex_low, strict=False, rule='Low')
-
-    # Example from Doc: 6 Candidates, Full
-    ex_6 = """
-    A>B>C>D>E>F
-    """
-    run_example("6 Candidates Full", ex_6, strict=True)
-
-    ex_mult = """
-    A>B>C
-    A>B>C
-    A>B>C
-    A>B>C
-    B>C>A
-    B>C>A
-    B>C>A
-    C>B>A
-    C>B>A
-    """
-    run_example("My test case", ex_mult, strict=True, compressed=False, rule='Low')
+run_example("add title", ex1, strict=False, rule='High', compressed=True)
