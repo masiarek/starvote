@@ -1,5 +1,8 @@
 # starvote
 
+## improvements:
+* See details: https://docs.google.com/document/d/1phZYBGaItsuzOcD4PI_dG8liGd5MBvU2jJtYG0SdRb4/edit?tab=t.0
+
 ## A STAR Voting election tabulator
 
 ## Copyright 2023-2024 by Larry Hastings
