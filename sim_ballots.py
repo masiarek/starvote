@@ -3,9 +3,9 @@ import string
 import collections
 
 # --- SIMULATION CONFIGURATION ---
-SEED_VALUE = 99          # Controls Randomness (Groups & Scores)
-TOTAL_CANDIDATES = 3     # Total candidates to distribute
-NUM_GROUPS = 2           # How many factions to create
+SEED_VALUE = 99  # Controls Randomness (Groups & Scores)
+TOTAL_CANDIDATES = 3  # Total candidates to distribute
+NUM_GROUPS = 2  # How many factions to create
 NOISE_LEVEL = 0.3        # Probability of score jitter
 
 # Ballot counts per scenario

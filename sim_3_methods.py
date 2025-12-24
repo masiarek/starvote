@@ -5,6 +5,7 @@ from starvote import Tiebreaker
 
 class SimpleTiebreaker(Tiebreaker):
     def __call__(self, options, tie, desired, exception):
+        # Consistent tie-breaking by alphabetical order
         return sorted(tie)[:desired]
 
 def generate_ballots(num_cands, num_ballots):
@@ -19,10 +20,10 @@ def format_csv(candidates, ballots):
     rows = [",".join(str(b[c]) for c in candidates) for b in ballots]
     return f"{header}\n" + "\n".join(rows)
 
-def find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2):
+def find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2, seed=42):
+    # Set the seed for reproducibility
+    random.seed(seed)
     tiebreaker = SimpleTiebreaker()
-
-    print(f"Testing: {num_cands} candidates, {num_ballots} ballots, {num_winners} winners...")
 
     attempt = 0
     while True:
@@ -47,11 +48,13 @@ def find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2):
             w_bloc  = ",".join(sorted(list(res_bloc)))
             w_sss   = ",".join(sorted(list(res_sss)))
 
-            # Print exactly in your preferred format
-            print(f"Attempt: {attempt}")
-            print(f"Allocated: {w_alloc}")
-            print(f"Bloc STAR: {w_bloc}")
-            print(f"SSS:       {w_sss}")
+            # Print Parameters and Results
+            print("--- Election Summary ---")
+            print(f"Parameters: candidates={num_cands}, ballots={num_ballots}, winners={num_winners}, seed={seed}")
+            print(f"Attempt:    {attempt}")
+            print(f"Allocated:  {w_alloc}")
+            print(f"Bloc STAR:  {w_bloc}")
+            print(f"SSS:        {w_sss}")
             print("\nBallots:")
             print("```text")
             print(format_csv(candidates, ballots))
@@ -59,5 +62,5 @@ def find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2):
             break
 
 if __name__ == "__main__":
-    # You can now easily change these parameters to find different minimal sets
-    find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2)
+    # Parameters can be adjusted here
+    find_minimal_gold(num_cands=3, num_ballots=3, num_winners=2, seed=42)
