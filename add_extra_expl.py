@@ -9,16 +9,13 @@ from starvote import Tiebreaker
 # 1. CONFIGURATION & INPUT
 # ---
 csv_input = """
-A1,A2,B
-5,5,0
-5,5,0
-0,0,5
-0,0,4
+A,B,C
+5,5,5
 """
 
 # TIEBREAKER SETTINGS
 # Options: 'first' (A1 wins), 'last' (A2/B wins), 'manual' (Uses list below)
-TIEBREAKER_MODE = 'last'
+TIEBREAKER_MODE = 'LasT'
 
 # Only used if TIEBREAKER_MODE is 'manual'
 MANUAL_ORDER = ['A1', 'A2', 'B']
@@ -32,13 +29,15 @@ COLOR_RESET = '\033[0m'   # Reset to default color
 # 2. TIEBREAKER CLASS
 # ---
 class SequenceTiebreaker(Tiebreaker):
-    def __init__(self, mode='last', manual_order=None):
+    def __init__(self, mode='last', manual_order=None, silent=False):
         """
         mode: 'first', 'last', or 'manual'
         manual_order: list of candidates (only used if mode='manual')
+        silent: if True, suppresses the print output (used for pre-calculation)
         """
         self.mode = mode.lower()
         self.manual_order = manual_order or []
+        self.silent = silent
         self.order_map = {}
         self.info_printed = False
 
@@ -60,10 +59,9 @@ class SequenceTiebreaker(Tiebreaker):
         # Lower index = Higher Priority
         self.order_map = {c: i for i, c in enumerate(self.preferred_order)}
 
-        # Debug info (prints once)
-        if not self.info_printed:
-            print(f"Tiebreaker Mode: {self.mode.upper()}")
-            print(f"Priority Order:  {self.preferred_order}")
+        # Debug info (prints once) - UPDATED FORMAT
+        if not self.info_printed and not self.silent:
+            print(f"Tiebreaker Mode: {self.mode.upper()} first -priority order:  {self.preferred_order}")
             self.info_printed = True
 
     def __call__(self, options, tie, desired, exception):
@@ -278,17 +276,29 @@ def print_extended_analysis(ballots, winners):
 def run_election(csv_input, mode, manual_list):
     # A. Matrix Calculation
     candidates, matrix = calculate_preference_matrix(csv_input)
-    if candidates and matrix:
-        print("--- Input Ballot Data ---")
-        print(csv_input.strip())
-
-    # B. Starvote Execution
     ballots = parse_ballots_from_string(csv_input)
+    finalists = get_top_two_finalists(ballots)
 
-    # Initialize the new SequenceTiebreaker
-    tiebreaker = SequenceTiebreaker(mode=mode, manual_order=manual_list)
+    # Print Matrix + Condorcet (MOVED TO TOP)
+    if winners_silent := starvote.election(
+        method=starvote.star,
+        ballots=ballots,
+        seats=1,
+        tiebreaker=SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=True),
+        verbosity=0 # Silent run to get winners for Analysis
+    ):
+        if candidates and matrix:
+            print("--- Input Ballot Data ---")
+            print(csv_input.strip())
+            print_matrix(candidates, matrix, finalists)
+            print_extended_analysis(ballots, winners_silent) # Analysis now appears before STAR logs
 
-    print("\n--- STARVOTE results ---")
+    # B. Starvote Execution (Verbose Run)
+    print("\n--- STARVOTE results ---") # MOVED HEADER
+
+    # Initialize the tiebreaker (prints the new format)
+    tiebreaker = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=False)
+
     winners = starvote.election(
         method=starvote.star,
         ballots=ballots,
@@ -296,12 +306,6 @@ def run_election(csv_input, mode, manual_list):
         tiebreaker=tiebreaker,
         verbosity=1
     )
-
-    # C. Visuals
-    finalists = get_top_two_finalists(ballots)
-    if winners:
-        print_matrix(candidates, matrix, finalists)
-        print_extended_analysis(ballots, winners)
 
 if __name__ == "__main__":
     run_election(csv_input, TIEBREAKER_MODE, MANUAL_ORDER)

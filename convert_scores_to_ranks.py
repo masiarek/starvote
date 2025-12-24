@@ -62,12 +62,11 @@ def convert_star_to_rcv_strict(csv_data):
 # --- Test Data (8 Candidates) ---
 # Using quotes since one name contains a space, just to be safe with CSV parsing
 raw_csv_input = """
-A,B
-5,0 
-5,0 
-0,1 
-0,1 
-0,1 
+A1,A2,B
+5,5,0
+5,5,0
+0,0,5
+0,0,4
 """
 
 print ('--- STAR Voting Scores (5 is Max Score) ---', raw_csv_input)
