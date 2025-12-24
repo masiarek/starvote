@@ -2,6 +2,7 @@ import starvote
 import io
 import csv
 import re
+import random
 from collections import defaultdict
 from starvote import Tiebreaker
 
@@ -14,11 +15,16 @@ A,B,C
 """
 
 # TIEBREAKER SETTINGS
-# Options: 'first' (A1 wins), 'last' (A2/B wins), 'manual' (Uses list below)
-TIEBREAKER_MODE = 'LasT'
+# Options:
+#   'first'  (Left-to-Right: A wins)
+#   'last'   (Right-to-Left: C wins)
+#   'manual' (Uses MANUAL_ORDER list)
+#   'random' (Uses Random Seed)
+TIEBREAKER_MODE = 'random'
 
-# Only used if TIEBREAKER_MODE is 'manual'
-MANUAL_ORDER = ['A1', 'A2', 'B']
+# Config for specific modes
+MANUAL_ORDER = ['A1', 'A2', 'B']  # Used if mode='manual'
+RANDOM_SEED = 42                  # Used if mode='random' (integer)
 
 # --- ANSI Color Codes ---
 COLOR_GREEN = '\033[92m'  # Green for 'For'
@@ -30,11 +36,6 @@ COLOR_RESET = '\033[0m'   # Reset to default color
 # ---
 class SequenceTiebreaker(Tiebreaker):
     def __init__(self, mode='last', manual_order=None, silent=False):
-        """
-        mode: 'first', 'last', or 'manual'
-        manual_order: list of candidates (only used if mode='manual')
-        silent: if True, suppresses the print output (used for pre-calculation)
-        """
         self.mode = mode.lower()
         self.manual_order = manual_order or []
         self.silent = silent
@@ -42,31 +43,34 @@ class SequenceTiebreaker(Tiebreaker):
         self.info_printed = False
 
     def initialize(self, options, ballots):
-        # Detect candidates from the first ballot to preserve CSV order
         first_ballot = next(iter(ballots))
         cands_in_csv_order = list(first_ballot.keys())
 
         if self.mode == 'manual' and self.manual_order:
             self.preferred_order = self.manual_order
         elif self.mode == 'first':
-            # Priority: Left-to-Right in CSV
             self.preferred_order = cands_in_csv_order
         else:
             # Default: Right-to-Left in CSV ('last')
             self.preferred_order = list(reversed(cands_in_csv_order))
 
-        # Create a lookup map: {CandidateName: Index}
-        # Lower index = Higher Priority
         self.order_map = {c: i for i, c in enumerate(self.preferred_order)}
 
-        # Debug info (prints once) - UPDATED FORMAT
         if not self.info_printed and not self.silent:
-            print(f"Tiebreaker Mode: {self.mode.upper()} first -priority order:  {self.preferred_order}")
+            print(f"Tiebreaker: \"{self.mode.upper()}\" Candidate first - priority order:  {self.preferred_order}")
             self.info_printed = True
 
     def __call__(self, options, tie, desired, exception):
-        # Sort tied candidates by their index in the order_map
-        return sorted(tie, key=lambda c: self.order_map.get(c, 999))[:desired]
+        ranked = sorted(tie, key=lambda c: self.order_map.get(c, 999))
+        winners = ranked[:desired]
+
+        if not self.silent:
+            print("\n[Tiebreaker: Sequence Priority]")
+            print(f"  Tie detected among: {tie}")
+            print(f"  Priority order: {self.preferred_order}")
+            print(f"  Result: {winners} selected based on sequence priority.")
+
+        return winners
 
 # ---
 # 3. HELPER FUNCTIONS
@@ -85,7 +89,6 @@ def parse_ballots_from_string(ballot_string):
 
     for line in lines[1:]:
         parts = re.split(r'[,\t]+', line)
-
         weight = 1
         if ':' in parts[0]:
             w_str, s_str = parts[0].split(':', 1)
@@ -103,17 +106,14 @@ def parse_ballots_from_string(ballot_string):
         ballot = {}
         for i, header in enumerate(headers):
             ballot[header] = scores[i]
-
         for _ in range(weight):
             ballots.append(ballot)
-
     return ballots
 
 def calculate_preference_matrix(ballot_data_text):
     candidates = []
     ballots = []
     normalized_lines = []
-
     for line in ballot_data_text.strip().split('\n'):
         clean = line.split('#')[0].strip()
         if clean:
@@ -132,7 +132,6 @@ def calculate_preference_matrix(ballot_data_text):
         for row in reader:
             clean_row = [f.strip() for f in row if f.strip()]
             if not clean_row: continue
-
             weight = 1
             if ':' in clean_row[0]:
                 w_str, s_str = clean_row[0].split(':', 1)
@@ -140,7 +139,6 @@ def calculate_preference_matrix(ballot_data_text):
                     weight = int(w_str)
                     clean_row[0] = s_str
                 except ValueError: pass
-
             try:
                 scores = [int(s) for s in clean_row]
                 for _ in range(weight):
@@ -150,23 +148,19 @@ def calculate_preference_matrix(ballot_data_text):
 
     if not ballots: return None, None
     num_ballots = len(ballots)
-
     matrix = defaultdict(lambda: defaultdict(tuple))
     for i, c_i in enumerate(candidates):
         for j, c_j in enumerate(candidates):
             if i == j:
                 matrix[c_i][c_j] = (0, 0, num_ballots)
                 continue
-            for_i = 0
-            against_i = 0
-            no_pref = 0
+            for_i = 0; against_i = 0; no_pref = 0
             for ballot in ballots:
                 if i < len(ballot) and j < len(ballot):
                     if ballot[i] > ballot[j]: for_i += 1
                     elif ballot[j] > ballot[i]: against_i += 1
                     else: no_pref += 1
             matrix[c_i][c_j] = (for_i, against_i, no_pref)
-
     return candidates, matrix
 
 def get_top_two_finalists(ballots):
@@ -183,7 +177,6 @@ def get_top_two_finalists(ballots):
 def print_matrix(candidates, matrix, finalists=None):
     if not candidates or not matrix: return
     if finalists is None: finalists = []
-
     print("\n--- Runoff (Preference) Matrix ---")
     print(f"Legend: {COLOR_GREEN}For{COLOR_RESET} - {COLOR_RED}Against{COLOR_RESET} - No Preference")
     print("        * indicates Top 2 Finalist")
@@ -210,7 +203,6 @@ def print_matrix(candidates, matrix, finalists=None):
         prefix = "* " if cand_i in finalists else "  "
         row_label = f"{prefix}{cand_i} >"
         row_str = f"{row_label:>{row_label_width}} | "
-
         for cand_j in candidates:
             if cand_i == cand_j:
                 row_str += f"{'---':^{col_width}} |"
@@ -245,26 +237,16 @@ def print_matrix(candidates, matrix, finalists=None):
 def print_extended_analysis(ballots, winners):
     if not winners: return
     runoff_winner_name = list(winners)[0]
-
-    # 1. Calculate totals
     scores = defaultdict(int)
     for b in ballots:
         for c, s in b.items():
             scores[c] += s
-
-    # 2. Find the maximum score
     max_score = max(scores.values()) if scores else 0
-
-    # 3. Identify ALL candidates who share that top score
     top_scorers = [c for c, s in scores.items() if s == max_score]
 
-    # 4. Check for Divergence
-    # We only flag a divergence if the winner is NOT in the group of top scorers.
     if runoff_winner_name not in top_scorers:
-        # Sort scores for display logic
         ranked_by_score = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        score_winner_name = ranked_by_score[0][0] # Just for display purposes
-
+        score_winner_name = ranked_by_score[0][0]
         print(f"\n{'  NOTE: SCORING / RUNOFF DIVERGENCE DETECTED  ':^60}")
         print(f"Score Winner ({score_winner_name}) != Runoff Winner ({runoff_winner_name})")
     else:
@@ -273,39 +255,52 @@ def print_extended_analysis(ballots, winners):
 # ---
 # 4. EXECUTION
 # ---
-def run_election(csv_input, mode, manual_list):
-    # A. Matrix Calculation
+def run_election(csv_input, mode, manual_list, seed):
     candidates, matrix = calculate_preference_matrix(csv_input)
     ballots = parse_ballots_from_string(csv_input)
     finalists = get_top_two_finalists(ballots)
 
-    # Print Matrix + Condorcet (MOVED TO TOP)
+    # DETERMINE TIEBREAKER
+    if mode.lower() == 'random':
+        # Define random logic
+        tiebreaker_obj = lambda options, tie, desired, exception: random.sample(list(tie), desired)
+        tiebreaker_silent = tiebreaker_obj
+
+        # RESET SEED for Consistency Check (Silent Run)
+        random.seed(seed)
+    else:
+        tiebreaker_obj = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=False)
+        tiebreaker_silent = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=True)
+
+    # A. Matrix + Analysis (Silent Run)
     if winners_silent := starvote.election(
-        method=starvote.star,
-        ballots=ballots,
-        seats=1,
-        tiebreaker=SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=True),
-        verbosity=0 # Silent run to get winners for Analysis
+            method=starvote.star,
+            ballots=ballots,
+            seats=1,
+            tiebreaker=tiebreaker_silent,
+            verbosity=0
     ):
         if candidates and matrix:
             print("--- Input Ballot Data ---")
             print(csv_input.strip())
             print_matrix(candidates, matrix, finalists)
-            print_extended_analysis(ballots, winners_silent) # Analysis now appears before STAR logs
+            print_extended_analysis(ballots, winners_silent)
 
     # B. Starvote Execution (Verbose Run)
-    print("\n--- STARVOTE results ---") # MOVED HEADER
+    print("\n--- STARVOTE results ---")
 
-    # Initialize the tiebreaker (prints the new format)
-    tiebreaker = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=False)
+    # RESET SEED again for Verbose Run (to match the Silent Run result)
+    if mode.lower() == 'random':
+        random.seed(seed)
+        print(f"Tiebreaker: RANDOM Mode (Seed: {seed})")
 
     winners = starvote.election(
         method=starvote.star,
         ballots=ballots,
         seats=1,
-        tiebreaker=tiebreaker,
+        tiebreaker=tiebreaker_obj,
         verbosity=1
     )
 
 if __name__ == "__main__":
-    run_election(csv_input, TIEBREAKER_MODE, MANUAL_ORDER)
+    run_election(csv_input, TIEBREAKER_MODE, MANUAL_ORDER, RANDOM_SEED)
