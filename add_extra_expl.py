@@ -10,26 +10,26 @@ from starvote import Tiebreaker
 # 1. CONFIGURATION & INPUT
 # ---
 csv_input = """
-A,B,C
-5,5,5
+#,A,B,C,D,E
+5:5,3,4,1,2
+5:5,1,2,4,3
+8:2,5,1,3,4
+3:4,3,5,1,2
+7:4,2,5,1,3
+2:3,4,5,2,1
+7:1,2,4,5,3
+8:3,4,1,2,5
 """
 
 # TIEBREAKER SETTINGS
-# Options:
-#   'first'  (Left-to-Right: A wins)
-#   'last'   (Right-to-Left: C wins)
-#   'manual' (Uses MANUAL_ORDER list)
-#   'random' (Uses Random Seed)
-TIEBREAKER_MODE = 'random'
-
-# Config for specific modes
-MANUAL_ORDER = ['A1', 'A2', 'B']  # Used if mode='manual'
-RANDOM_SEED = 42                  # Used if mode='random' (integer)
+TIEBREAKER_MODE = 'manual'
+MANUAL_ORDER = ['B', 'A', 'C']
+RANDOM_SEED = 42
 
 # --- ANSI Color Codes ---
-COLOR_GREEN = '\033[92m'  # Green for 'For'
-COLOR_RED = '\033[91m'    # Red for 'Against'
-COLOR_RESET = '\033[0m'   # Reset to default color
+COLOR_GREEN = '\033[92m'
+COLOR_RED = '\033[91m'
+COLOR_RESET = '\033[0m'
 
 # ---
 # 2. TIEBREAKER CLASS
@@ -51,7 +51,6 @@ class SequenceTiebreaker(Tiebreaker):
         elif self.mode == 'first':
             self.preferred_order = cands_in_csv_order
         else:
-            # Default: Right-to-Left in CSV ('last')
             self.preferred_order = list(reversed(cands_in_csv_order))
 
         self.order_map = {c: i for i, c in enumerate(self.preferred_order)}
@@ -78,15 +77,25 @@ class SequenceTiebreaker(Tiebreaker):
 def parse_ballots_from_string(ballot_string):
     lines = []
     for line in ballot_string.strip().split('\n'):
-        clean_line = line.split('#')[0].strip()
+        line = line.strip()
+        # FIX 1: Allow line to start with "#," (header case)
+        if line.startswith("#,"):
+            clean_line = line
+        else:
+            clean_line = line.split('#')[0].strip()
+
         if clean_line:
             lines.append(clean_line)
 
     if not lines: return []
 
     headers = [name.strip() for name in re.split(r'[,\t]+', lines[0]) if name.strip()]
-    ballots = []
 
+    # FIX 2: If first header is '#', remove it to align with data columns
+    if headers and headers[0] == '#':
+        headers.pop(0)
+
+    ballots = []
     for line in lines[1:]:
         parts = re.split(r'[,\t]+', line)
         weight = 1
@@ -115,7 +124,13 @@ def calculate_preference_matrix(ballot_data_text):
     ballots = []
     normalized_lines = []
     for line in ballot_data_text.strip().split('\n'):
-        clean = line.split('#')[0].strip()
+        line = line.strip()
+        # FIX 1 (Matrix): Allow line to start with "#,"
+        if line.startswith("#,"):
+            clean = line
+        else:
+            clean = line.split('#')[0].strip()
+
         if clean:
             normalized_lines.append(clean.replace('\t', ','))
     normalized_text = "\n".join(normalized_lines)
@@ -127,6 +142,9 @@ def calculate_preference_matrix(ballot_data_text):
             headers = next(reader)
             if any(h.strip() for h in headers):
                 candidates = [h.strip() for h in headers if h.strip()]
+                # FIX 2 (Matrix): Remove '#' from candidates list
+                if candidates and candidates[0] == '#':
+                    candidates.pop(0)
         except StopIteration: return None, None
 
         for row in reader:
@@ -260,19 +278,14 @@ def run_election(csv_input, mode, manual_list, seed):
     ballots = parse_ballots_from_string(csv_input)
     finalists = get_top_two_finalists(ballots)
 
-    # DETERMINE TIEBREAKER
     if mode.lower() == 'random':
-        # Define random logic
         tiebreaker_obj = lambda options, tie, desired, exception: random.sample(list(tie), desired)
         tiebreaker_silent = tiebreaker_obj
-
-        # RESET SEED for Consistency Check (Silent Run)
         random.seed(seed)
     else:
         tiebreaker_obj = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=False)
         tiebreaker_silent = SequenceTiebreaker(mode=mode, manual_order=manual_list, silent=True)
 
-    # A. Matrix + Analysis (Silent Run)
     if winners_silent := starvote.election(
             method=starvote.star,
             ballots=ballots,
@@ -286,10 +299,7 @@ def run_election(csv_input, mode, manual_list, seed):
             print_matrix(candidates, matrix, finalists)
             print_extended_analysis(ballots, winners_silent)
 
-    # B. Starvote Execution (Verbose Run)
     print("\n--- STARVOTE results ---")
-
-    # RESET SEED again for Verbose Run (to match the Silent Run result)
     if mode.lower() == 'random':
         random.seed(seed)
         print(f"Tiebreaker: RANDOM Mode (Seed: {seed})")
